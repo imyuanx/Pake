@@ -831,6 +831,14 @@ fn build_window(
 
     window_builder = window_builder.on_navigation(|_| true);
 
+    // Keep timers/polling running when the window is hidden (WKWebView suspends
+    // hidden webviews by default). Requires macOS 14+.
+    #[cfg(target_os = "macos")]
+    {
+        window_builder = window_builder
+            .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+    }
+
     let window = window_builder.build()?;
 
     #[cfg(target_os = "windows")]
