@@ -15,6 +15,7 @@ fn main() {
             "webview_navigate",
             "set_title_bar_color",
             "reveal_download",
+            "open_window",
         ]),
     ))
     .expect("Failed to build Pake permissions")

@@ -262,6 +262,26 @@ fn open_requested_window(
     Ok(window)
 }
 
+/// Estuary: open `url` in a new top-level app window built like the main one.
+pub fn open_url_window(app: &AppHandle, url: Url) -> tauri::Result<WebviewWindow> {
+    let state = app.state::<MultiWindowState>();
+    let label = state.next_window_label();
+    let window = build_window(
+        app,
+        &state.pake_config,
+        &state.tauri_config,
+        WindowBuildOptions {
+            label: &label,
+            url: WebviewUrl::External(url),
+            visible: true,
+            new_window_features: None,
+        },
+    )?;
+    reapply_window_icon(&window);
+    let _ = window.set_focus();
+    Ok(window)
+}
+
 /// Open a multi-window clone of the home app. The window is built hidden and
 /// revealed on its first real page load (see `lib.rs` on_page_load) so Cmd+N
 /// does not flash an empty shell the way the main window used to.
