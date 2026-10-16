@@ -915,6 +915,9 @@ mod tests {
     }
 }
 
+const OPEN_WINDOW_MIN_WIDTH: f64 = 520.0;
+const OPEN_WINDOW_MIN_HEIGHT: f64 = 420.0;
+
 /// Estuary: open a same-origin URL in a new app window (shared session, same
 /// UA, init scripts and background-throttling policy as the main window).
 #[command]
@@ -934,6 +937,12 @@ pub fn open_window(
     }
     let new_window =
         crate::app::window::open_url_window(&app, target).map_err(|e| e.to_string())?;
+    // Secondary windows (e.g. a single message) can be much smaller than the
+    // main window's --min-width/--min-height, which the builder inherits.
+    let _ = new_window.set_min_size(Some(tauri::LogicalSize::new(
+        OPEN_WINDOW_MIN_WIDTH,
+        OPEN_WINDOW_MIN_HEIGHT,
+    )));
     if let (Some(w), Some(h)) = (width, height) {
         if w.is_finite() && h.is_finite() && w >= 200.0 && h >= 150.0 {
             let _ = new_window.set_size(tauri::LogicalSize::new(w, h));
