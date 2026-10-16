@@ -26,6 +26,7 @@
     "allow-webview-navigate",
     "allow-set-title-bar-color",
     "allow-reveal-download",
+    "allow-open-window",
     "shell:allow-open",
     "core:window:allow-theme",
     "core:window:allow-start-dragging",
