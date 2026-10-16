@@ -216,7 +216,8 @@ fn is_blank_popup_url(url: &Url) -> bool {
 /// app URLs never leak into the system browser.
 fn is_external_popup_target(url: &Url, home_host: Option<&str>) -> bool {
     match url.scheme() {
-        "mailto" | "tel" => true,
+        // tel: is left to the page, which asks for confirmation before dialing.
+        "mailto" => true,
         "http" | "https" => url.host_str().is_some() && url.host_str() != home_host,
         _ => false,
     }
@@ -229,10 +230,10 @@ mod popup_tests {
     #[test]
     fn external_popup_targets() {
         let home = Some("mail.example.net");
-        for ok in ["https://www.fieldnotetravel.com/x", "http://a.b/", "mailto:a@b.c", "tel:+1555"] {
+        for ok in ["https://www.fieldnotetravel.com/x", "http://a.b/", "mailto:a@b.c"] {
             assert!(is_external_popup_target(&Url::parse(ok).unwrap(), home), "{ok}");
         }
-        for no in ["https://mail.example.net/m/1", "about:srcdoc", "javascript:void(0)", "data:text/html,x", "file:///etc/hosts"] {
+        for no in ["https://mail.example.net/m/1", "about:srcdoc", "javascript:void(0)", "data:text/html,x", "file:///etc/hosts", "tel:+1555"] {
             assert!(!is_external_popup_target(&Url::parse(no).unwrap(), home), "{no}");
         }
     }
