@@ -8,9 +8,7 @@
   ],
   "remote": {
     "urls": [
-      "https://estuary-preview.tail5954c0.ts.net/*",
-      "https://fnos.tail5954c0.ts.net/*",
-      "http://100.89.212.33:8080/*"
+      "https://fnos.tail5954c0.ts.net/*"
     ]
   },
   "permissions": [
