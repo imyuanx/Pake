@@ -212,9 +212,31 @@ fn is_blank_popup_url(url: &Url) -> bool {
     url.scheme() == "about" && url.path() == "blank"
 }
 
+/// http(s) to another host, or mailto:/tel:. Same-host targets stay denied so
+/// app URLs never leak into the system browser.
+fn is_external_popup_target(url: &Url, home_host: Option<&str>) -> bool {
+    match url.scheme() {
+        // tel: is left to the page, which asks for confirmation before dialing.
+        "mailto" => true,
+        "http" | "https" => url.host_str().is_some() && url.host_str() != home_host,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod popup_tests {
-    use super::is_blank_popup_url;
+    use super::{is_blank_popup_url, is_external_popup_target};
+
+    #[test]
+    fn external_popup_targets() {
+        let home = Some("mail.example.net");
+        for ok in ["https://www.fieldnotetravel.com/x", "http://a.b/", "mailto:a@b.c"] {
+            assert!(is_external_popup_target(&Url::parse(ok).unwrap(), home), "{ok}");
+        }
+        for no in ["https://mail.example.net/m/1", "about:srcdoc", "javascript:void(0)", "data:text/html,x", "file:///etc/hosts", "tel:+1555"] {
+            assert!(!is_external_popup_target(&Url::parse(no).unwrap(), home), "{no}");
+        }
+    }
     use tauri::Url;
 
     #[test]
@@ -570,10 +592,23 @@ fn build_window(
         let app_handle = app.clone();
         let popup_config = config.clone();
         let popup_tauri_config = tauri_config.clone();
+        let home_host = Url::parse(&window_config.url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_owned));
         window_builder = window_builder.on_new_window(move |target_url, features| {
             // Even without --new-window, two-stage popups need a real webview
             // with our download delegate, never a proxy for the main window.
             if !allow_new_window && !is_blank_popup_url(&target_url) {
+                // Estuary: popups the page JS never saw (links in script-less
+                // sandboxed iframes, the native "Open Link in New Window" menu)
+                // used to be dropped silently. Hand external targets to the
+                // system browser, as the injected click handler would.
+                if is_external_popup_target(&target_url, home_host.as_deref()) {
+                    use tauri_plugin_opener::OpenerExt;
+                    if let Err(error) = app_handle.opener().open_url(target_url.as_str(), None::<&str>) {
+                        eprintln!("[Pake] Failed to open external link: {error}");
+                    }
+                }
                 return NewWindowResponse::Deny;
             }
             match open_requested_window(
