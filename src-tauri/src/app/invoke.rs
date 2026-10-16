@@ -299,7 +299,7 @@ pub async fn download_file(
     window: WebviewWindow,
     app: AppHandle,
     params: DownloadFileParams,
-) -> Result<(), String> {
+) -> Result<String, String> {
     // Toast on the calling window (secondary windows included), not a hard-coded
     // main-window label. Tauri injects the invoker as `window`.
     show_toast(
@@ -396,11 +396,17 @@ pub async fn download_file(
                 return Err(error);
             }
 
+            // Estuary: tell the page where the file landed (before the success
+            // toast) so a page-side toast can offer "show in Finder".
+            let detail = serde_json::json!({ "path": file_path }).to_string();
+            let _ = window.eval(format!(
+                "window.dispatchEvent(new CustomEvent('pake:download-complete',{{detail:{detail}}}));"
+            ));
             show_toast(
                 &window,
                 &get_download_message_with_lang(MessageType::Success, params.language.clone()),
             );
-            Ok(())
+            Ok(file_path)
         }
         Err(e) => {
             show_toast(
@@ -913,4 +919,20 @@ mod tests {
         assert!(requests[0].contains("cookie: session=fixture\r\n"));
         assert!(!requests[1].contains("cookie:"));
     }
+}
+
+/// Estuary: reveal a finished download in Finder/Explorer. Only paths inside
+/// the configured download directory are accepted.
+#[command]
+pub fn reveal_download(app: AppHandle, path: String) -> Result<(), String> {
+    let dir = get_download_dir(&app)?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let target = std::path::Path::new(&path)
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    if !target.starts_with(&dir) {
+        return Err("Path is outside the download directory".into());
+    }
+    tauri_plugin_opener::reveal_item_in_dir(target).map_err(|e| e.to_string())
 }

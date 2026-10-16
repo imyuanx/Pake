@@ -2,7 +2,17 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "pake-capability",
   "description": "Capability for the pake app.",
-  "webviews": ["pake", "pake-*"],
+  "webviews": [
+    "pake",
+    "pake-*"
+  ],
+  "remote": {
+    "urls": [
+      "https://estuary-preview.tail5954c0.ts.net/*",
+      "https://fnos.tail5954c0.ts.net/*",
+      "http://100.89.212.33:8080/*"
+    ]
+  },
   "permissions": [
     "allow-download-file",
     "allow-send-notification",
@@ -15,6 +25,7 @@
     "allow-set-zoom",
     "allow-webview-navigate",
     "allow-set-title-bar-color",
+    "allow-reveal-download",
     "shell:allow-open",
     "core:window:allow-theme",
     "core:window:allow-start-dragging",

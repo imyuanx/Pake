@@ -765,6 +765,11 @@ fn build_window(
     // catching it here is independent of the page CSP and the IPC channel.
     {
         let download_handle = app.clone();
+        // WKWebView reports Finished with path: None on macOS, so remember the
+        // destination chosen in Requested, keyed by download URL.
+        let pending_downloads: std::sync::Arc<
+            std::sync::Mutex<std::collections::HashMap<String, PathBuf>>,
+        > = Default::default();
         window_builder = window_builder.on_download(move |webview, event| match event {
             DownloadEvent::Requested { url, destination } => {
                 match get_download_dir(&download_handle) {
@@ -784,6 +789,9 @@ fn build_window(
                         let target = download_dir.join(sanitize_download_filename(&filename));
                         if let Some(path_str) = target.to_str() {
                             *destination = PathBuf::from(check_file_or_append(path_str));
+                            if let Ok(mut pending) = pending_downloads.lock() {
+                                pending.insert(url.to_string(), destination.clone());
+                            }
                         } else {
                             eprintln!("[Pake] Download destination is not valid UTF-8");
                             return false;
@@ -806,16 +814,31 @@ fn build_window(
                 true
             }
             DownloadEvent::Finished {
-                url: _,
-                path: _,
+                url,
+                path,
                 success,
             } => {
+                let remembered = pending_downloads
+                    .lock()
+                    .ok()
+                    .and_then(|mut pending| pending.remove(url.as_str()));
+                let path = path.or(remembered);
                 // Toast on the window that started the download (including
                 // secondary multi-window labels), not a hard-coded "pake".
                 let toast_window = download_handle
                     .get_webview_window(webview.label())
                     .or_else(|| download_handle.get_webview_window("pake"));
                 if let Some(window) = toast_window {
+                    // Estuary: same event invoke.rs emits, so native downloads
+                    // also let the page offer "show in Finder".
+                    if success {
+                        if let Some(file_path) = path.as_ref() {
+                            let detail = serde_json::json!({ "path": file_path }).to_string();
+                            let _ = window.eval(format!(
+                                "window.dispatchEvent(new CustomEvent('pake:download-complete',{{detail:{detail}}}));"
+                            ));
+                        }
+                    }
                     let message_type = if success {
                         MessageType::Success
                     } else {
