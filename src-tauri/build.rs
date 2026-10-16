@@ -16,6 +16,7 @@ fn main() {
             "set_title_bar_color",
             "reveal_download",
             "open_window",
+            "open_external",
         ]),
     ))
     .expect("Failed to build Pake permissions")

@@ -972,3 +972,21 @@ pub fn open_window(
     }
     Ok(new_window.label().to_string())
 }
+
+/// Estuary: hand a link the user chose (message-body click or the custom
+/// "Open Link" menu) to the OS default handler: browser for http(s), mail
+/// client for mailto:, phone app for tel:. Unlike plugin:shell|open this
+/// accepts any host (intranet IPs, the app's own host) and tel:+... numbers.
+#[command]
+pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let target = Url::parse(url.trim()).map_err(|e| format!("Invalid URL: {e}"))?;
+    match target.scheme() {
+        "http" | "https" if target.host_str().is_some() => {}
+        "mailto" | "tel" => {}
+        _ => return Err("open_external only accepts http(s), mailto: and tel: URLs".into()),
+    }
+    app.opener()
+        .open_url(target.as_str(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
