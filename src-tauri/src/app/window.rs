@@ -807,7 +807,7 @@ fn build_window(
             }
             DownloadEvent::Finished {
                 url: _,
-                path: _,
+                path,
                 success,
             } => {
                 // Toast on the window that started the download (including
@@ -816,6 +816,16 @@ fn build_window(
                     .get_webview_window(webview.label())
                     .or_else(|| download_handle.get_webview_window("pake"));
                 if let Some(window) = toast_window {
+                    // Estuary: same event invoke.rs emits, so native downloads
+                    // also let the page offer "show in Finder".
+                    if success {
+                        if let Some(file_path) = path.as_ref() {
+                            let detail = serde_json::json!({ "path": file_path }).to_string();
+                            let _ = window.eval(format!(
+                                "window.dispatchEvent(new CustomEvent('pake:download-complete',{{detail:{detail}}}));"
+                            ));
+                        }
+                    }
                     let message_type = if success {
                         MessageType::Success
                     } else {
