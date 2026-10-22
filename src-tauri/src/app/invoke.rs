@@ -949,6 +949,7 @@ pub fn open_window(
     url: String,
     width: Option<f64>,
     height: Option<f64>,
+    traffic_light: Option<(f64, f64)>,
 ) -> Result<String, String> {
     let current = window.url().map_err(|e| e.to_string())?;
     let target = current
@@ -958,7 +959,7 @@ pub fn open_window(
         return Err("open_window only accepts same-origin URLs".into());
     }
     let new_window =
-        crate::app::window::open_url_window(&app, target).map_err(|e| e.to_string())?;
+        crate::app::window::open_url_window(&app, target, traffic_light).map_err(|e| e.to_string())?;
     // Secondary windows (e.g. a single message) can be much smaller than the
     // main window's --min-width/--min-height, which the builder inherits.
     let _ = new_window.set_min_size(Some(tauri::LogicalSize::new(

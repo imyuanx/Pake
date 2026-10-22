@@ -206,6 +206,8 @@ struct WindowBuildOptions<'a> {
     url: WebviewUrl,
     visible: bool,
     new_window_features: Option<NewWindowFeatures>,
+    /// Estuary: macOS traffic-light position (logical px) for this window.
+    traffic_light: Option<(f64, f64)>,
 }
 
 fn is_blank_popup_url(url: &Url) -> bool {
@@ -273,6 +275,7 @@ fn open_requested_window(
             url: WebviewUrl::External(target_url.clone()),
             visible: true,
             new_window_features: Some(features),
+            traffic_light: None,
         },
     )?;
 
@@ -285,7 +288,11 @@ fn open_requested_window(
 }
 
 /// Estuary: open `url` in a new top-level app window built like the main one.
-pub fn open_url_window(app: &AppHandle, url: Url) -> tauri::Result<WebviewWindow> {
+pub fn open_url_window(
+    app: &AppHandle,
+    url: Url,
+    traffic_light: Option<(f64, f64)>,
+) -> tauri::Result<WebviewWindow> {
     let state = app.state::<MultiWindowState>();
     let label = state.next_window_label();
     let window = build_window(
@@ -297,6 +304,7 @@ pub fn open_url_window(app: &AppHandle, url: Url) -> tauri::Result<WebviewWindow
             url: WebviewUrl::External(url),
             visible: true,
             new_window_features: None,
+            traffic_light,
         },
     )?;
     reapply_window_icon(&window);
@@ -442,6 +450,7 @@ fn build_window_with_label(
             url,
             visible: false,
             new_window_features: None,
+            traffic_light: None,
         },
     )
 }
@@ -457,7 +466,10 @@ fn build_window(
         url,
         visible,
         new_window_features,
+        traffic_light,
     } = opts;
+    #[cfg(not(target_os = "macos"))]
+    let _ = traffic_light;
     #[cfg(target_os = "macos")]
     let use_native_window_tabbing = config.multi_window && new_window_features.is_none();
     #[cfg(target_os = "macos")]
@@ -736,6 +748,10 @@ fn build_window(
             TitleBarStyle::Visible
         };
         window_builder = window_builder.title_bar_style(title_bar_style);
+        if let Some((x, y)) = traffic_light {
+            window_builder = window_builder
+                .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
+        }
         if window_config.title_bar_follows_page() {
             window_builder = window_builder.hidden_title(true);
         }
