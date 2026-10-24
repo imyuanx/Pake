@@ -1012,8 +1012,8 @@ pub async fn open_window(
         }
     }
 
-    // Fallback: hidden until content (or first finished load, see lib.rs), max 1.5 s.
-    let new_window = crate::app::window::open_url_window(&app, target, traffic_light, color, false)
+    // Fallback: show immediately (theme background, so no white flash).
+    let new_window = crate::app::window::open_url_window(&app, target, traffic_light, color, true)
         .map_err(|e| e.to_string())?;
     // Secondary windows (e.g. a single message) can be much smaller than the
     // main window's --min-width/--min-height, which the builder inherits.
@@ -1025,14 +1025,7 @@ pub async fn open_window(
         let _ = new_window.set_size(s);
     }
     let label = new_window.label().to_string();
-    let rx = warm::wait_for_content(&label);
-    tauri::async_runtime::spawn(async move {
-        let why = match tokio::time::timeout(std::time::Duration::from_millis(1500), rx).await {
-            Ok(_) => "content ready",
-            Err(_) => "1.5s timeout",
-        };
-        warm::reveal(&new_window, why, t0);
-    });
+    warm::tlog(format!("{label} shown (immediate) {}ms after open_window", t0.elapsed().as_millis()));
     warm::schedule_prewarm(&app, std::time::Duration::from_millis(1500));
     Ok(label)
 }

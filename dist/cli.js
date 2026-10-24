@@ -1306,8 +1306,35 @@ async function writeAllConfigs(tauriConf, platform) {
     const configJsonPath = path.join(tauriConfigDirectory, 'tauri.conf.json');
     await fsExtra.outputJSON(configJsonPath, tauriConf2, { spaces: 4 });
 }
+// Tauri 2 only lets a remote page call app commands when its origin is listed
+// in the capability's remote.urls. Add the packaged URL's origin at build time.
+async function allowRemoteOrigin(url) {
+    let origin;
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
+            return;
+        origin = parsed.origin;
+    }
+    catch {
+        return;
+    }
+    const capPath = path.join(npmDirectory, 'src-tauri/capabilities/default.json');
+    if (!(await fsExtra.pathExists(capPath)))
+        return;
+    const cap = await fsExtra.readJson(capPath);
+    const pattern = `${origin}/*`;
+    cap.remote = cap.remote ?? {};
+    const urls = Array.isArray(cap.remote.urls) ? cap.remote.urls : [];
+    if (!urls.includes(pattern))
+        urls.push(pattern);
+    cap.remote.urls = urls;
+    await fsExtra.writeJson(capPath, cap, { spaces: 2 });
+}
 async function mergeConfig(url, options, tauriConf) {
     await copyTemplateConfigs();
+    if (!options.useLocalFile)
+        await allowRemoteOrigin(url);
     const { appVersion, userAgent, showSystemTray, useLocalFile, identifier, name = 'pake-app', installerLanguage, wasm, camera, microphone, } = options;
     const platform = asSupportedPlatform(process.platform);
     if (options.hideTitleBar && platform !== 'darwin') {
