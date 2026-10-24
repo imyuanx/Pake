@@ -1059,3 +1059,9 @@ pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
         .open_url(target.as_str(), None::<&str>)
         .map_err(|e| e.to_string())
 }
+
+/// Estuary: page-side paint milestones (inject/timing.js) for the timing log.
+#[command]
+pub fn window_timing(window: WebviewWindow, data: String) {
+    crate::app::warm::tlog(format!("{} timing {}", window.label(), data));
+}

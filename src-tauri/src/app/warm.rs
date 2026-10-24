@@ -91,6 +91,9 @@ pub fn background() -> Option<tauri::window::Color> {
 
 /// Main window finished its first load: start prewarming once, after it has settled.
 pub fn on_main_loaded(app: &AppHandle) {
+    if !prewarm_enabled() {
+        return;
+    }
     {
         let mut s = inner().lock().unwrap();
         if s.started {
@@ -102,6 +105,9 @@ pub fn on_main_loaded(app: &AppHandle) {
 }
 
 pub fn schedule_prewarm(app: &AppHandle, delay: Duration) {
+    if !prewarm_enabled() {
+        return;
+    }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(delay).await;
@@ -249,4 +255,9 @@ pub fn set_in_windows_menu(window: &WebviewWindow, include: bool) {
 /// True while open_window is waiting for this window's content signal.
 pub fn is_waiting(label: &str) -> bool {
     inner().lock().map(|s| s.waiters.contains_key(label)).unwrap_or(false)
+}
+
+/// Always-on prewarm costs a whole WebContent process; off unless ESTUARY_PREWARM=1.
+pub fn prewarm_enabled() -> bool {
+    std::env::var("ESTUARY_PREWARM").map(|v| v == "1").unwrap_or(false)
 }

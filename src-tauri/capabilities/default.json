@@ -28,6 +28,7 @@
     "allow-open-external",
     "allow-prewarm-ready",
     "allow-window-content-ready",
+    "allow-window-timing",
     "shell:allow-open",
     "core:window:allow-theme",
     "core:window:allow-start-dragging",
