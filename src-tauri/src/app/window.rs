@@ -208,6 +208,10 @@ struct WindowBuildOptions<'a> {
     new_window_features: Option<NewWindowFeatures>,
     /// Estuary: macOS traffic-light position (logical px) for this window.
     traffic_light: Option<(f64, f64)>,
+    /// Estuary: native window + WebView colour before the page paints.
+    background: Option<tauri::window::Color>,
+    /// Estuary: take focus when built (false for hidden prewarm windows).
+    focused: bool,
 }
 
 fn is_blank_popup_url(url: &Url) -> bool {
@@ -276,6 +280,8 @@ fn open_requested_window(
             visible: true,
             new_window_features: Some(features),
             traffic_light: None,
+            background: None,
+            focused: true,
         },
     )?;
 
@@ -292,9 +298,12 @@ pub fn open_url_window(
     app: &AppHandle,
     url: Url,
     traffic_light: Option<(f64, f64)>,
+    background: Option<tauri::window::Color>,
+    visible: bool,
 ) -> tauri::Result<WebviewWindow> {
     let state = app.state::<MultiWindowState>();
     let label = state.next_window_label();
+    let t = std::time::Instant::now();
     let window = build_window(
         app,
         &state.pake_config,
@@ -302,14 +311,43 @@ pub fn open_url_window(
         WindowBuildOptions {
             label: &label,
             url: WebviewUrl::External(url),
-            visible: true,
+            visible,
             new_window_features: None,
             traffic_light,
+            background,
+            focused: visible,
         },
     )?;
+    crate::app::warm::tlog(format!("{label} built in {}ms (visible={visible})", t.elapsed().as_millis()));
     reapply_window_icon(&window);
-    let _ = window.set_focus();
+    if visible {
+        let _ = window.set_focus();
+    }
     Ok(window)
+}
+
+/// Estuary: hidden, unfocused window preloading the SPA (see app/warm.rs).
+pub fn build_prewarm_window(
+    app: &AppHandle,
+    label: &str,
+    url: Url,
+    background: Option<tauri::window::Color>,
+) -> tauri::Result<WebviewWindow> {
+    let state = app.state::<MultiWindowState>();
+    build_window(
+        app,
+        &state.pake_config,
+        &state.tauri_config,
+        WindowBuildOptions {
+            label,
+            url: WebviewUrl::External(url),
+            visible: false,
+            new_window_features: None,
+            traffic_light: None,
+            background,
+            focused: false,
+        },
+    )
 }
 
 /// Open a multi-window clone of the home app. The window is built hidden and
@@ -378,6 +416,9 @@ pub fn hide_all_app_windows(app: &AppHandle) {
 pub fn show_all_app_windows(app: &AppHandle, init_fullscreen: bool) {
     let windows = app.webview_windows();
     for window in windows.values() {
+        if crate::app::warm::is_hidden_warm(window.label()) {
+            continue;
+        }
         let _ = window.unminimize();
         let _ = window.show();
         reapply_window_icon(window);
@@ -451,6 +492,8 @@ fn build_window_with_label(
             visible: false,
             new_window_features: None,
             traffic_light: None,
+            background: None,
+            focused: true,
         },
     )
 }
@@ -467,6 +510,8 @@ fn build_window(
         visible,
         new_window_features,
         traffic_light,
+        background,
+        focused,
     } = opts;
     #[cfg(not(target_os = "macos"))]
     let _ = traffic_light;
@@ -550,6 +595,7 @@ fn build_window(
     let mut window_builder = WebviewWindowBuilder::new(app, label, url)
         .title(effective_title)
         .visible(visible)
+        .focused(focused)
         .user_agent(user_agent)
         .resizable(window_config.resizable)
         .maximized(window_config.maximize);
@@ -931,6 +977,10 @@ fn build_window(
     {
         window_builder = window_builder
             .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+    }
+
+    if let Some(color) = background {
+        window_builder = window_builder.background_color(color);
     }
 
     let window = window_builder.build()?;

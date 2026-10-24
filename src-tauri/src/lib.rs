@@ -29,7 +29,7 @@ const GDK_BACKEND: &str = "GDK_BACKEND";
 
 use app::{
     invoke::{
-        clear_dock_badge, close_notification, download_file, increment_dock_badge, open_external, open_window,
+        clear_dock_badge, close_notification, download_file, increment_dock_badge, open_external, open_window, prewarm_ready, window_content_ready,
         reveal_download,
         send_notification, set_dock_badge, set_dock_badge_label, set_title_bar_color, set_zoom,
         update_theme_mode, webview_navigate,
@@ -284,6 +284,7 @@ fn apply_linux_webkit_runtime_flags() {
 }
 
 pub fn run_app() {
+    app::warm::init_clock();
     #[cfg(target_os = "linux")]
     {
         apply_linux_gdk_backend();
@@ -366,6 +367,15 @@ pub fn run_app() {
     {
         let page_load_revealed = startup_window_revealed.clone();
         app_builder = app_builder.on_page_load(move |webview, payload| {
+            if webview.label() != "pake" {
+                app::warm::tlog(format!(
+                    "{} page {:?} {} (+{}ms after open)",
+                    webview.label(),
+                    payload.event(),
+                    payload.url().path(),
+                    app::warm::ms_since_open(webview.label())
+                ));
+            }
             if !matches!(payload.event(), PageLoadEvent::Finished) {
                 return;
             }
@@ -383,12 +393,18 @@ pub fn run_app() {
                 if let Some(window) = webview.app_handle().get_webview_window("pake") {
                     reveal_startup_window(window, init_fullscreen, &page_load_revealed);
                 }
+                app::warm::on_main_loaded(webview.app_handle());
+                return;
+            }
+            // Prewarm windows stay hidden until open_window hands them a message.
+            if label.starts_with(app::warm::WARM_PREFIX) {
                 return;
             }
 
             // Multi-window clones (pake-1, pake-2, …) built hidden by
             // open_additional_window_safe.
-            if label.starts_with("pake-") {
+            // Windows from open_window wait for the page's content signal instead.
+            if label.starts_with("pake-") && !app::warm::is_waiting(label) {
                 if let Some(window) = webview.app_handle().get_webview_window(label) {
                     reveal_built_window(&window);
                 }
@@ -417,6 +433,8 @@ pub fn run_app() {
             reveal_download,
             open_window,
             open_external,
+            prewarm_ready,
+            window_content_ready,
         ])
         .setup(move |app| {
             // Grant remote IPC only to the immutable, packaged entry origins,

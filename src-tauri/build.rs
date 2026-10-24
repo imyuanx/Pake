@@ -17,6 +17,8 @@ fn main() {
             "reveal_download",
             "open_window",
             "open_external",
+            "prewarm_ready",
+            "window_content_ready",
         ]),
     ))
     .expect("Failed to build Pake permissions")

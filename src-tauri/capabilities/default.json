@@ -26,6 +26,8 @@
     "allow-reveal-download",
     "allow-open-window",
     "allow-open-external",
+    "allow-prewarm-ready",
+    "allow-window-content-ready",
     "shell:allow-open",
     "core:window:allow-theme",
     "core:window:allow-start-dragging",

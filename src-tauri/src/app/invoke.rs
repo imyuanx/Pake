@@ -942,15 +942,20 @@ const OPEN_WINDOW_MIN_HEIGHT: f64 = 420.0;
 
 /// Estuary: open a same-origin URL in a new app window (shared session, same
 /// UA, init scripts and background-throttling policy as the main window).
+/// Message windows reuse a hidden prewarmed window when one is ready, else the
+/// new window stays hidden until it has content (see app/warm.rs).
 #[command]
-pub fn open_window(
+pub async fn open_window(
     app: AppHandle,
     window: WebviewWindow,
     url: String,
     width: Option<f64>,
     height: Option<f64>,
     traffic_light: Option<(f64, f64)>,
+    background: Option<(u8, u8, u8)>,
 ) -> Result<String, String> {
+    use crate::app::warm;
+    let t0 = std::time::Instant::now();
     let current = window.url().map_err(|e| e.to_string())?;
     let target = current
         .join(&url)
@@ -958,20 +963,90 @@ pub fn open_window(
     if target.origin() != current.origin() {
         return Err("open_window only accepts same-origin URLs".into());
     }
-    let new_window =
-        crate::app::window::open_url_window(&app, target, traffic_light).map_err(|e| e.to_string())?;
+    warm::tlog(format!("open_window {}", target.path()));
+    if let Some(rgb) = background {
+        warm::set_background(rgb);
+    }
+    let color = warm::background();
+    let size = match (width, height) {
+        (Some(w), Some(h)) if w.is_finite() && h.is_finite() && w >= 200.0 && h >= 150.0 => {
+            Some(tauri::LogicalSize::new(w, h))
+        }
+        _ => None,
+    };
+
+    // Prewarmed: route the already-loaded page to the message, show once it rendered.
+    if traffic_light.is_none() && target.path().starts_with("/m/") {
+        if let Some(w) = warm::take_ready(&app) {
+            let label = w.label().to_string();
+            let rx = warm::wait_for_content(&label);
+            let _ = w.set_min_size(Some(tauri::LogicalSize::new(
+                OPEN_WINDOW_MIN_WIDTH,
+                OPEN_WINDOW_MIN_HEIGHT,
+            )));
+            if let Some(s) = size {
+                let _ = w.set_size(s);
+            }
+            if let Some(c) = color {
+                let _ = w.set_background_color(Some(c));
+            }
+            let mut path = target.path().to_string();
+            if let Some(q) = target.query() {
+                path.push('?');
+                path.push_str(q);
+            }
+            let js = format!(
+                "window.__estuaryOpenMessage && window.__estuaryOpenMessage({})",
+                serde_json::to_string(&path).map_err(|e| e.to_string())?
+            );
+            if let Err(e) = w.eval(&js) {
+                warm::tlog(format!("{label} eval failed: {e}"));
+            }
+            let why = match tokio::time::timeout(std::time::Duration::from_millis(800), rx).await {
+                Ok(_) => "prewarmed, content ready",
+                Err(_) => "prewarmed, 800ms timeout",
+            };
+            warm::reveal(&w, why, t0);
+            warm::schedule_prewarm(&app, std::time::Duration::from_millis(1500));
+            return Ok(label);
+        }
+    }
+
+    // Fallback: hidden until content (or first finished load, see lib.rs), max 1.5 s.
+    let new_window = crate::app::window::open_url_window(&app, target, traffic_light, color, false)
+        .map_err(|e| e.to_string())?;
     // Secondary windows (e.g. a single message) can be much smaller than the
     // main window's --min-width/--min-height, which the builder inherits.
     let _ = new_window.set_min_size(Some(tauri::LogicalSize::new(
         OPEN_WINDOW_MIN_WIDTH,
         OPEN_WINDOW_MIN_HEIGHT,
     )));
-    if let (Some(w), Some(h)) = (width, height) {
-        if w.is_finite() && h.is_finite() && w >= 200.0 && h >= 150.0 {
-            let _ = new_window.set_size(tauri::LogicalSize::new(w, h));
-        }
+    if let Some(s) = size {
+        let _ = new_window.set_size(s);
     }
-    Ok(new_window.label().to_string())
+    let label = new_window.label().to_string();
+    let rx = warm::wait_for_content(&label);
+    tauri::async_runtime::spawn(async move {
+        let why = match tokio::time::timeout(std::time::Duration::from_millis(1500), rx).await {
+            Ok(_) => "content ready",
+            Err(_) => "1.5s timeout",
+        };
+        warm::reveal(&new_window, why, t0);
+    });
+    warm::schedule_prewarm(&app, std::time::Duration::from_millis(1500));
+    Ok(label)
+}
+
+/// Estuary: the page in a hidden prewarm window is ready to take a message.
+#[command]
+pub fn prewarm_ready(window: WebviewWindow) {
+    crate::app::warm::mark_ready(&window);
+}
+
+/// Estuary: the page in this window has rendered its content (message windows).
+#[command]
+pub fn window_content_ready(window: WebviewWindow) {
+    crate::app::warm::content_ready(&window);
 }
 
 /// Estuary: hand a link the user chose (message-body click or the custom
