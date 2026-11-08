@@ -25,9 +25,20 @@ describe('native IPC permission registration', () => {
     for (const command of commands) expect(declared).toContain(command);
   });
 
-  it('keeps the packaged capability local until configured origins are granted', () => {
+  it('grants app commands, including autostart, to the packaged remote origin', () => {
     const capability = JSON.parse(read('capabilities/default.json'));
-    expect(capability.remote).toBeUndefined();
-    expect(capability.permissions).toContain('allow-download-file');
+    expect(capability.remote?.urls).toContain(
+      'https://fnos.tail5954c0.ts.net/*',
+    );
+    expect(capability.permissions).toEqual(
+      expect.arrayContaining([
+        'allow-download-file',
+        'allow-reveal-download',
+        'allow-open-window',
+        'allow-open-external',
+        'allow-get-autostart',
+        'allow-set-autostart',
+      ]),
+    );
   });
 });

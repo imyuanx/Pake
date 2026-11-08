@@ -28,11 +28,11 @@ const WEBKIT_DMABUF_RENDERER_FORCE_SHM: &str = "WEBKIT_DMABUF_RENDERER_FORCE_SHM
 const GDK_BACKEND: &str = "GDK_BACKEND";
 
 use app::{
+    autostart::{get_autostart, set_autostart},
     invoke::{
-        clear_dock_badge, close_notification, download_file, increment_dock_badge, open_external, open_window,
-        reveal_download,
-        send_notification, set_dock_badge, set_dock_badge_label, set_title_bar_color, set_zoom,
-        update_theme_mode, webview_navigate,
+        clear_dock_badge, close_notification, download_file, increment_dock_badge, open_external,
+        open_window, reveal_download, send_notification, set_dock_badge, set_dock_badge_label,
+        set_title_bar_color, set_zoom, update_theme_mode, webview_navigate,
     },
     setup::{set_global_shortcut, set_system_tray},
     window::{
@@ -417,6 +417,8 @@ pub fn run_app() {
             reveal_download,
             open_window,
             open_external,
+            get_autostart,
+            set_autostart,
         ])
         .setup(move |app| {
             // Grant remote IPC only to the immutable, packaged entry origins,
