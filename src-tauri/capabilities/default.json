@@ -26,6 +26,8 @@
     "allow-reveal-download",
     "allow-open-window",
     "allow-open-external",
+    "allow-get-autostart",
+    "allow-set-autostart",
     "shell:allow-open",
     "core:window:allow-theme",
     "core:window:allow-start-dragging",

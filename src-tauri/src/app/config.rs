@@ -321,6 +321,8 @@ mod tests {
             "send_notification",
             "close_notification",
             "set_zoom",
+            "get_autostart",
+            "set_autostart",
             "plugin:window|is_fullscreen",
         ] {
             for label in ["pake", "pake-1"] {
@@ -350,6 +352,32 @@ mod tests {
                 "unrelated",
                 Some("https://example.com/")
             ));
+        }
+    }
+
+    #[test]
+    fn autostart_is_granted_to_the_packaged_estuary_origin_only() {
+        let acl = resolve(&config_for("https://example.com/app"));
+        for command in ["get_autostart", "set_autostart"] {
+            assert!(
+                allows(
+                    &acl,
+                    command,
+                    "pake",
+                    Some("https://fnos.tail5954c0.ts.net/inbox")
+                ),
+                "denied {command} on the packaged origin"
+            );
+            assert!(allows(
+                &acl,
+                command,
+                "pake-2",
+                Some("https://example.com/settings")
+            ));
+            assert!(
+                !allows(&acl, command, "pake", Some("https://evil.com/")),
+                "allowed {command} on an unrelated origin"
+            );
         }
     }
 
