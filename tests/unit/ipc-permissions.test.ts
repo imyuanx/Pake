@@ -41,4 +41,14 @@ describe('native IPC permission registration', () => {
       ]),
     );
   });
+
+  it('lets data-tauri-drag-region double-click toggle maximize on the remote origin', () => {
+    const capability = JSON.parse(read('capabilities/default.json'));
+    expect(capability.permissions).toEqual(
+      expect.arrayContaining([
+        'core:window:allow-start-dragging',
+        'core:window:allow-internal-toggle-maximize',
+      ]),
+    );
+  });
 });
